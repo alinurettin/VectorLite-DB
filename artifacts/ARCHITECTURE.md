@@ -1,4 +1,4 @@
-﻿# ğŸ“ System Architecture Document: VectorLite-DB
+﻿# 📐 System Architecture Document: VectorLite-DB
 - **Project:** VectorLite-DB
 - **Author:** Expert Software Architect
 - **Status:** APPROVED & COMPLETE
