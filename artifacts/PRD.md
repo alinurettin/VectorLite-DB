@@ -1,4 +1,4 @@
-﻿# ğŸ“Š Product Requirements Document (PRD): VectorLite-DB
+﻿# 📊 Product Requirements Document (PRD): VectorLite-DB
 - **Project:** VectorLite-DB
 - **Author:** Expert Business Analyst
 - **Status:** APPROVED & COMPLETE
