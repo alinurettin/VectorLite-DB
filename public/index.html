@@ -1,36 +1,91 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VectorLite-DB | Operational Studio</title>
+  <title>VectorLite-DB | High-Performance Embedded Vector Engine</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="header">
     <div class="brand">
-      <span class="logo">⚡</span>
+      <span class="logo">📐</span>
       <div>
         <h1>VectorLite-DB</h1>
-        <span class="sub">Embedded In-Memory Vector Search Engine</span>
+        <span class="sub">Embedded Zero-Dependency Vector Search & Clustering Engine</span>
       </div>
     </div>
-    <div class="status-badge">🟢 Operational Active</div>
+    <div class="status-badge">🟢 Engine Active</div>
   </header>
+
   <main class="main">
-    <div class="card">
-      <h2>Engine Overview</h2>
-      <p>Lightweight zero-dependency vector similarity search engine with Cosine distance indexing and clustering API.</p>
-      <div class="metrics-row" id="metricsRow">
-        <div class="metric"><span class="lbl">STATUS</span><span class="val">HEALTHY</span></div>
-        <div class="metric"><span class="lbl">LATENCY</span><span class="val">1.2 ms</span></div>
-        <div class="metric"><span class="lbl">THROUGHPUT</span><span class="val">1,250 req/s</span></div>
+    <!-- Top Telemetry Row -->
+    <div class="metrics-row">
+      <div class="metric"><span class="lbl">TOTAL VECTORS</span><span class="val green" id="mTotal">0</span></div>
+      <div class="metric"><span class="lbl">DIMENSIONALITY</span><span class="val blue" id="mDim">4-D</span></div>
+      <div class="metric"><span class="lbl">DEFAULT METRIC</span><span class="val" id="mMetric">COSINE</span></div>
+      <div class="metric"><span class="lbl">AVG QUERY LATENCY</span><span class="val green" id="mLatency">&lt; 0.1 ms</span></div>
+    </div>
+
+    <!-- Main Grid: 2D Projection Space & Query Results -->
+    <div class="studio-grid">
+      <!-- 2D Canvas Projection -->
+      <div class="card canvas-card">
+        <div class="card-header">
+          <h2>Vector Space Projection (2D PCA Canvas)</h2>
+          <span class="hint">Click anywhere inside canvas to query nearest vectors</span>
+        </div>
+        <div class="canvas-wrapper">
+          <canvas id="vectorCanvas" width="460" height="340"></canvas>
+        </div>
+        <div class="canvas-controls">
+          <button class="btn btn-outline" id="btnCluster">Run K-Means (k=3)</button>
+          <button class="btn btn-outline" id="btnReload">Refresh Space</button>
+        </div>
+      </div>
+
+      <!-- Nearest Neighbors Results -->
+      <div class="card results-card">
+        <h2>Top-K Nearest Neighbors</h2>
+        <div class="results-list" id="resultsList">
+          <div class="empty-state">Click on the canvas or execute a query below to see nearest vector matches.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Query & Ingestion Controls -->
+    <div class="card control-card">
+      <h2>Vector Ingestion & Ad-Hoc Similarity Query</h2>
+      <div class="form-grid">
+        <div class="form-col">
+          <h3>Insert New Vector</h3>
+          <form id="insertForm">
+            <input type="text" id="insId" placeholder="Vector ID (e.g. vec-custom-1)" required>
+            <input type="text" id="insCoords" placeholder="Coordinates (e.g. 0.8, 0.2, 0.1, 0.3)" required>
+            <input type="text" id="insLabel" placeholder="Label / Category (e.g. Generative AI)" required>
+            <button type="submit" class="btn btn-primary">Upsert Vector</button>
+          </form>
+        </div>
+        <div class="form-col">
+          <h3>Execute Vector Query</h3>
+          <form id="queryForm">
+            <input type="text" id="queryCoords" placeholder="Query Vector (e.g. 0.9, 0.15, 0.2, 0.1)" required>
+            <select id="queryMetric">
+              <option value="cosine">Cosine Similarity (Normalized)</option>
+              <option value="euclidean">Euclidean Distance (L2)</option>
+              <option value="dot">Dot Product</option>
+            </select>
+            <button type="submit" class="btn btn-secondary">Search Top Neighbors</button>
+          </form>
+        </div>
       </div>
     </div>
   </main>
+
   <footer class="footer">
     <p>VectorLite-DB &bull; Autonomously engineered by 7-Agent SDLC Factory for <a href="https://github.com/alinurettin/VectorLite-DB" target="_blank">Ali Nurettin Demir</a></p>
   </footer>
+
   <script src="app.js"></script>
 </body>
 </html>

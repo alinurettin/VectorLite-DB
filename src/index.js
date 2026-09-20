@@ -1,67 +1,49 @@
-// VectorLite-DB - Production Engine Entrypoint
+/**
+ * VectorLite-DB - Production Vector Search API Server
+ * Author: Ali Nurettin Demir (@alinurettin)
+ */
+
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const url = require('url');
+const { VectorLiteDB } = require('./engine');
 
+const DIMENSION = parseInt(process.env.VECTOR_DIMENSION, 10) || 4;
+const db = new VectorLiteDB({ dimension: DIMENSION, defaultMetric: 'cosine' });
 
-const VectorEngine = require('./engine');
-const engine = new VectorEngine();
-engine.insert('vec-1', [0.9, 0.1, 0.05], { category: 'nlp', label: 'transformer' });
-engine.insert('vec-2', [0.85, 0.15, 0.1], { category: 'nlp', label: 'attention' });
-engine.insert('vec-3', [0.05, 0.95, 0.2], { category: 'cv', label: 'convolution' });
-
-function handleApi(req, res, pathname, body) {
-  if (req.method === 'POST' && pathname === '/api/vectors/insert') {
-    try {
-      const data = JSON.parse(body || '{}');
-      const r = engine.insert(data.id, data.vector, data.metadata);
-      res.writeHead(201, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ success: true, total: engine.count(), ...r }));
-    } catch(e) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ error: e.message }));
-    }
-  }
-  if (req.method === 'POST' && pathname === '/api/vectors/search') {
-    try {
-      const data = JSON.parse(body || '{}');
-      const matches = engine.search(data.vector, data.topK || 5);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ success: true, count: matches.length, matches }));
-    } catch(e) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ error: e.message }));
-    }
-  }
-  return false;
-}
-
+// Seed with initial representative vectors for instant demo
+db.upsertBatch([
+  { id: 'vec-alpha', vector: [0.95, 0.1, 0.2, 0.05], metadata: { label: 'Machine Learning', category: 'ai' } },
+  { id: 'vec-beta', vector: [0.88, 0.25, 0.15, 0.1], metadata: { label: 'Deep Learning', category: 'ai' } },
+  { id: 'vec-gamma', vector: [0.05, 0.9, 0.85, 0.1], metadata: { label: 'Distributed Systems', category: 'infra' } },
+  { id: 'vec-delta', vector: [0.1, 0.82, 0.95, 0.2], metadata: { label: 'Cloud Architecture', category: 'infra' } },
+  { id: 'vec-epsilon', vector: [0.3, 0.4, 0.1, 0.92], metadata: { label: 'Cryptography & Zero Trust', category: 'sec' } }
+]);
 
 const PORT = parseInt(process.env.PORT, 10) || 6009;
 const publicDir = path.join(__dirname, '..', 'public');
 const startTime = Date.now();
 
 function requestHandler(req, res) {
-  const parsed = url.parse(req.url, true);
-  const pathname = parsed.pathname;
+  const reqUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
+  const pathname = reqUrl.pathname;
 
+  // CORS
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With'
+      'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type'
     });
     return res.end();
   }
 
-  // Aggregate body
   let body = '';
   req.on('data', chunk => body += chunk);
   req.on('end', () => {
-    // 1. Health Endpoint
+    // 1. Health Status
     if (pathname === '/api/health') {
-      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
       return res.end(JSON.stringify({
         status: 'UP',
         service: 'VectorLite-DB',
@@ -70,52 +52,97 @@ function requestHandler(req, res) {
       }));
     }
 
-    // 2. Stats Endpoint
+    // 2. Telemetry & Stats
     if (pathname === '/api/stats') {
-      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
       return res.end(JSON.stringify({
         success: true,
         service: 'VectorLite-DB',
-        category: 'AI & Vector Search',
-        status: 'OPTIMAL',
-        uptimeSeconds: Math.floor((Date.now() - startTime) / 1000)
+        stats: db.getStats()
       }));
     }
 
-    // 3. Custom Domain API
-    if (typeof handleApi === 'function') {
-      const handled = handleApi(req, res, pathname, body);
-      if (handled !== false) return;
+    // 3. Upsert Vector
+    if (req.method === 'POST' && pathname === '/api/vectors') {
+      try {
+        const parsed = JSON.parse(body || '{}');
+        const record = db.upsert(parsed.id, parsed.vector, parsed.metadata);
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        return res.end(JSON.stringify({ success: true, record }));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: e.message }));
+      }
     }
 
-    // 4. Static Asset Delivery
-    let filePath = path.join(publicDir, pathname === '/' ? 'index.html' : pathname);
-    fs.stat(filePath, (err, stats) => {
-      if (!err && stats.isFile()) {
-        const ext = path.extname(filePath);
-        const mime = ext === '.html' ? 'text/html; charset=utf-8' : (ext === '.css' ? 'text/css' : 'application/javascript');
-        res.writeHead(200, { 'Content-Type': mime, 'Access-Control-Allow-Origin': '*' });
-        fs.createReadStream(filePath).pipe(res);
-      } else {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Endpoint Not Found', path: pathname }));
+    // 4. Query Nearest Neighbors
+    if (req.method === 'POST' && pathname === '/api/query') {
+      try {
+        const parsed = JSON.parse(body || '{}');
+        const queryRes = db.query(parsed.vector, {
+          topK: parsed.topK || 5,
+          metric: parsed.metric || 'cosine',
+          filter: parsed.filter
+        });
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        return res.end(JSON.stringify({ success: true, queryRes }));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: e.message }));
       }
-    });
+    }
+
+    // 5. K-Means Clustering
+    if (req.method === 'POST' && pathname === '/api/cluster') {
+      try {
+        const parsed = JSON.parse(body || '{}');
+        const k = parsed.k || 3;
+        const clusters = db.cluster(k);
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        return res.end(JSON.stringify({ success: true, clusters }));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: e.message }));
+      }
+    }
+
+    // 6. Delete Vector
+    if (req.method === 'DELETE' && pathname.startsWith('/api/vectors/')) {
+      const id = pathname.replace('/api/vectors/', '');
+      const deleted = db.delete(id);
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ success: true, deleted, id }));
+    }
+
+    // 7. Static Dashboard UI
+    let filePath = path.join(publicDir, pathname === '/' ? 'index.html' : pathname);
+    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+      const ext = path.extname(filePath).toLowerCase();
+      const mimeTypes = {
+        '.html': 'text/html; charset=utf-8',
+        '.css': 'text/css; charset=utf-8',
+        '.js': 'application/javascript; charset=utf-8',
+        '.json': 'application/json; charset=utf-8'
+      };
+      res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'text/plain' });
+      return res.end(fs.readFileSync(filePath));
+    }
+
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Endpoint not found' }));
   });
 }
 
-function startServer(port = PORT, callback) {
-  const s = http.createServer(requestHandler);
-  s.listen(port, () => {
-    if (callback) callback(s);
-  });
-  return s;
+function startServer(portToUse = PORT, callback) {
+  const server = http.createServer(requestHandler);
+  server.listen(portToUse, callback);
+  return server;
 }
 
 if (require.main === module) {
   startServer(PORT, () => {
-    console.log('VectorLite-DB server running on port ' + PORT);
+    console.log(`📐 VectorLite-DB live at http://localhost:${PORT}`);
   });
 }
 
-module.exports = { startServer, requestHandler };
+module.exports = { startServer, db };
